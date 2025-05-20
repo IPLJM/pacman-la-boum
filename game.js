@@ -1,4 +1,4 @@
-// Pac-Man DJ Battle V3 — Fantômes + mode panique
+// Pac-Man DJ Battle V3 — Fantômes+mode panique
 let pacmanImg, discoImg;
 let ghostImgs = [], ghostScaredImg;
 let pacman;
