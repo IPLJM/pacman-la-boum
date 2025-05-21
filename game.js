@@ -1,13 +1,13 @@
-// Pac-Man DJ Battle V3 — Fantômes+mode panique
-let pacmanImg, discoImg;
+// Pac-Man DJ Battle V4 — Tout amélioré 🟡👻
+let pacmanImg, discoImg, pacmanAngle = 0, pacmanMouth = 0;
 let ghostImgs = [], ghostScaredImg;
 let pacman;
 let ghosts = [];
 let gridSize = 20;
 let cols = 20;
-let rows = 11;
+let rows = 20;
 let grid = [];
-let direction;
+let direction, nextDirection;
 let score = 0;
 let gameOver = false;
 let ghostScared = false;
@@ -25,7 +25,16 @@ const levelMap = [
   [1,0,0,0,1,0,0,0,0,0,0,0,1,0,1,0,0,0,0,1],
   [1,1,1,0,1,1,1,1,1,0,1,1,1,0,1,0,1,1,1,1],
   [1,0,0,0,0,0,0,0,1,0,1,0,0,0,1,0,0,0,0,1],
-  [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1]
+  [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1],
+  [1,0,0,0,0,0,1,0,0,0,0,0,1,0,0,0,0,0,0,1],
+  [1,0,1,1,1,0,1,0,1,1,1,0,1,0,1,1,1,1,0,1],
+  [1,0,0,0,1,0,0,0,1,0,1,0,0,0,1,0,0,0,0,1],
+  [1,1,1,0,1,1,1,0,1,0,1,0,1,1,1,0,1,1,1,1],
+  [1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
+  [1,0,1,1,1,0,1,1,1,1,1,1,1,0,1,1,1,1,0,1],
+  [1,0,0,0,1,0,0,0,0,0,0,0,1,0,1,0,0,0,0,1],
+  [1,1,1,0,1,1,1,1,1,0,1,1,1,0,1,0,1,1,1,1],
+  [1,0,0,0,0,0,0,0,1,0,1,0,0,0,1,0,0,0,0,1]
 ];
 
 function preload() {
@@ -38,33 +47,31 @@ function preload() {
 }
 
 function setup() {
-  let canvas = createCanvas(cols * gridSize, rows * gridSize);
+  let canvas = createCanvas(400, 400);
   canvas.parent("game-container");
-  frameRate(10);
+  frameRate(12);
   resetGame();
 }
 
 function resetGame() {
   score = 0;
   direction = createVector(1, 0);
+  nextDirection = direction.copy();
   gameOver = false;
   ghostScared = false;
   ghostTimer = frameCount;
   pacman = createVector(1, 1);
   ghosts = [
-    { pos: createVector(18, 1), img: ghostImgs[0] },
-    { pos: createVector(1, 9), img: ghostImgs[1] },
-    { pos: createVector(18, 9), img: ghostImgs[2] },
-    { pos: createVector(10, 5), img: ghostImgs[3] }
+    { pos: createVector(18, 1), img: ghostImgs[0], active: true },
+    { pos: createVector(1, 18), img: ghostImgs[1], active: true },
+    { pos: createVector(10, 10), img: ghostImgs[2], active: true },
+    { pos: createVector(18, 18), img: ghostImgs[3], active: true }
   ];
   grid = [];
-  for (let y = 0; y < levelMap.length; y++) {
+  for (let y = 0; y < rows; y++) {
     let row = [];
-    for (let x = 0; x < levelMap[y].length; x++) {
-      row.push({
-        wall: levelMap[y][x] === 1,
-        disco: levelMap[y][x] === 0
-      });
+    for (let x = 0; x < cols; x++) {
+      row.push({ wall: levelMap[y][x] === 1, disco: levelMap[y][x] === 0 });
     }
     grid.push(row);
   }
@@ -74,52 +81,76 @@ function resetGame() {
 
 function draw() {
   background(0);
-  if (gameOver) {
-    fill(255);
-    textAlign(CENTER, CENTER);
-    textSize(32);
-    text("Game Over", width / 2, height / 2);
-    noLoop();
-    return;
-  }
 
-  // Toggle scared mode every 7 seconds
-  if (frameCount - ghostTimer > 70) {
+  if (frameCount - ghostTimer > 120) {
     ghostScared = !ghostScared;
     ghostTimer = frameCount;
   }
 
+  drawMap();
+  movePacman();
+  drawPacman();
+  moveGhosts();
+  drawGhosts();
+
+  if (grid[pacman.y][pacman.x].disco) {
+    grid[pacman.y][pacman.x].disco = false;
+    score++;
+    document.getElementById("score").innerText = "Score: " + score;
+  }
+}
+
+function drawMap() {
   for (let y = 0; y < rows; y++) {
     for (let x = 0; x < cols; x++) {
       if (grid[y][x].wall) {
-        fill(30, 30, 255);
+        fill(0, 0, 255);
         rect(x * gridSize, y * gridSize, gridSize, gridSize);
       } else if (grid[y][x].disco) {
         image(discoImg, x * gridSize + 6, y * gridSize + 6, gridSize - 12, gridSize - 12);
       }
     }
   }
+}
 
-  let nextX = pacman.x + direction.x;
-  let nextY = pacman.y + direction.y;
-  if (!grid[nextY] || !grid[nextY][nextX] || grid[nextY][nextX].wall) {
-    // stop
-  } else {
-    pacman.x = nextX;
-    pacman.y = nextY;
+function movePacman() {
+  let tx = pacman.x + nextDirection.x;
+  let ty = pacman.y + nextDirection.y;
+  if (!grid[ty]?.[tx]?.wall) {
+    direction = nextDirection.copy();
   }
+  let nx = pacman.x + direction.x;
+  let ny = pacman.y + direction.y;
+  if (!grid[ny]?.[nx]?.wall) {
+    pacman.x = nx;
+    pacman.y = ny;
+    pacmanAngle = direction.heading();
+  }
+  pacmanMouth = pacmanMouth === 0 ? 1 : 0;
+}
 
-  image(pacmanImg, pacman.x * gridSize, pacman.y * gridSize, gridSize, gridSize);
+function drawPacman() {
+  push();
+  translate(pacman.x * gridSize + gridSize / 2, pacman.y * gridSize + gridSize / 2);
+  rotate(pacmanAngle);
+  image(pacmanImg, -gridSize / 2, -gridSize / 2, gridSize, gridSize);
+  pop();
+}
 
+function moveGhosts() {
   for (let ghost of ghosts) {
+    if (!ghost.active) continue;
     if (frameCount % 5 === 0) {
       if (ghostScared) {
-        let dirs = [createVector(1, 0), createVector(-1, 0), createVector(0, 1), createVector(0, -1)];
-        let dir = random(dirs);
-        let tx = ghost.pos.x + dir.x;
-        let ty = ghost.pos.y + dir.y;
-        if (!grid[ty] || !grid[ty][tx] || grid[ty][tx].wall) continue;
-        ghost.pos.add(dir);
+        let dirs = shuffle([createVector(1,0), createVector(-1,0), createVector(0,1), createVector(0,-1)]);
+        for (let d of dirs) {
+          let nx = ghost.pos.x + d.x;
+          let ny = ghost.pos.y + d.y;
+          if (!grid[ny]?.[nx]?.wall) {
+            ghost.pos.add(d);
+            break;
+          }
+        }
       } else {
         let dx = pacman.x - ghost.pos.x;
         let dy = pacman.y - ghost.pos.y;
@@ -130,25 +161,32 @@ function draw() {
         }
       }
     }
-    let img = ghostScared ? ghostScaredImg : ghost.img;
-    image(img, ghost.pos.x * gridSize, ghost.pos.y * gridSize, gridSize, gridSize);
-    if (!ghostScared && ghost.pos.x === pacman.x && ghost.pos.y === pacman.y) {
-      gameOver = true;
+    if (ghost.pos.x === pacman.x && ghost.pos.y === pacman.y) {
+      if (ghostScared) {
+        ghost.active = false;
+        score += 100;
+        document.getElementById("score").innerText = "Score: " + score;
+      } else {
+        gameOver = true;
+        noLoop();
+      }
     }
   }
+}
 
-  if (grid[pacman.y][pacman.x].disco) {
-    grid[pacman.y][pacman.x].disco = false;
-    score++;
-    document.getElementById("score").innerText = "Score: " + score;
+function drawGhosts() {
+  for (let ghost of ghosts) {
+    if (!ghost.active) continue;
+    let img = ghostScared ? ghostScaredImg : ghost.img;
+    image(img, ghost.pos.x * gridSize, ghost.pos.y * gridSize, gridSize, gridSize);
   }
 }
 
 function keyPressed() {
-  if (keyCode === LEFT_ARROW && !grid[pacman.y][pacman.x - 1].wall) direction = createVector(-1, 0);
-  else if (keyCode === RIGHT_ARROW && !grid[pacman.y][pacman.x + 1].wall) direction = createVector(1, 0);
-  else if (keyCode === UP_ARROW && !grid[pacman.y - 1][pacman.x].wall) direction = createVector(0, -1);
-  else if (keyCode === DOWN_ARROW && !grid[pacman.y + 1][pacman.x].wall) direction = createVector(0, 1);
+  if (keyCode === LEFT_ARROW) nextDirection = createVector(-1, 0);
+  else if (keyCode === RIGHT_ARROW) nextDirection = createVector(1, 0);
+  else if (keyCode === UP_ARROW) nextDirection = createVector(0, -1);
+  else if (keyCode === DOWN_ARROW) nextDirection = createVector(0, 1);
 }
 
 function touchStarted() {
@@ -164,10 +202,8 @@ function touchEnded() {
   let dx = mouseX - touchStartX;
   let dy = mouseY - touchStartY;
   if (Math.abs(dx) > Math.abs(dy)) {
-    if (dx > 0 && !grid[pacman.y][pacman.x + 1].wall) direction = createVector(1, 0);
-    else if (dx < 0 && !grid[pacman.y][pacman.x - 1].wall) direction = createVector(-1, 0);
+    nextDirection = createVector(dx > 0 ? 1 : -1, 0);
   } else {
-    if (dy > 0 && !grid[pacman.y + 1][pacman.x].wall) direction = createVector(0, 1);
-    else if (dy < 0 && !grid[pacman.y - 1][pacman.x].wall) direction = createVector(0, -1);
+    nextDirection = createVector(0, dy > 0 ? 1 : -1);
   }
 }
