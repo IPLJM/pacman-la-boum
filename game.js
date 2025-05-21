@@ -1,4 +1,4 @@
-// Pac-Man DJ Battle V7 – Labyrinthe original propre + fond La Boum visible au centre
+// Pac-Man DJ Battle V7 - Grille propre, enclos fantômes, fond La Boum visible, structure fidèle
 let pacmanImg, discoImg, backgroundImg;
 let ghostImgs = [], ghostScaredImg;
 let pacman, pacmanLives = 3;
@@ -15,7 +15,6 @@ let ghostScared = false;
 let ghostScaredTimer = 0;
 let touchStartX, touchStartY;
 
-// 1 = mur, 0 = pastille, 2 = vide (fond visible), 9 = enclos fantômes
 const levelMap = [
   [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1],
   [1,0,0,0,0,0,0,0,0,0,0,0,1,1,1,0,0,0,0,0,0,0,0,0,0,0,0,1],
