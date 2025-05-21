@@ -1,41 +1,19 @@
-// Pac-Man DJ Battle V5 - version stable et complète avec fond, animation, mobile controls
-let pacmanImg, discoImg, backgroundImg, pacmanMouth = 0, pacmanAngle = 0;
+// Pac-Man DJ Battle V6 – Look & Logic comme le vrai
+let pacmanImg, discoImg, backgroundImg;
 let ghostImgs = [], ghostScaredImg;
-let pacman;
-let ghosts = [];
+let pacman, pacmanLives = 3;
+let ghosts = [], ghostSpawnTimers = [];
 let gridSize = 20;
-let cols = 20;
-let rows = 20;
+let cols = 28;
+let rows = 31;
 let grid = [];
 let direction, nextDirection;
 let score = 0;
+let highScore = 0;
 let gameOver = false;
 let ghostScared = false;
-let ghostTimer = 0;
+let ghostScaredTimer = 0;
 let touchStartX, touchStartY;
-
-const levelMap = [
-  [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1],
-  [1,0,0,0,0,0,1,0,0,0,0,0,1,0,0,0,0,0,0,1],
-  [1,0,1,1,1,0,1,0,1,1,1,0,1,0,1,1,1,1,0,1],
-  [1,0,0,0,1,0,0,0,1,0,1,0,0,0,1,0,0,0,0,1],
-  [1,1,1,0,1,1,1,0,1,0,1,0,1,1,1,0,1,1,1,1],
-  [1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
-  [1,0,1,1,1,0,1,1,1,1,1,1,1,0,1,1,1,1,0,1],
-  [1,0,0,0,1,0,0,0,0,0,0,0,1,0,1,0,0,0,0,1],
-  [1,1,1,0,1,1,1,1,1,0,1,1,1,0,1,0,1,1,1,1],
-  [1,0,0,0,0,0,0,0,1,0,1,0,0,0,1,0,0,0,0,1],
-  [1,0,1,1,1,1,1,0,1,1,1,0,1,1,1,0,1,1,0,1],
-  [1,0,0,0,0,0,1,0,0,0,0,0,1,0,0,0,1,0,0,1],
-  [1,1,1,1,1,0,1,1,1,1,1,1,1,0,1,1,1,0,1,1],
-  [1,0,0,0,1,0,0,0,0,0,0,0,1,0,1,0,0,0,0,1],
-  [1,0,1,0,1,1,1,0,1,0,1,0,1,1,1,0,1,1,1,1],
-  [1,0,1,0,0,0,0,0,1,0,1,0,0,0,0,0,1,0,0,1],
-  [1,0,1,1,1,1,1,1,1,0,1,1,1,1,1,1,1,0,1,1],
-  [1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
-  [1,0,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,0,1],
-  [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1]
-];
 
 function preload() {
   backgroundImg = loadImage("background.png");
@@ -46,7 +24,7 @@ function preload() {
 }
 
 function setup() {
-  let canvas = createCanvas(400, 400);
+  let canvas = createCanvas(cols * gridSize, rows * gridSize + 40);
   canvas.parent("game-container");
   frameRate(12);
   setupMobileControls();
@@ -58,11 +36,10 @@ function setupMobileControls() {
     document.body.style.overflow = "hidden";
     let controls = createDiv().id("mobile-controls").style("text-align:center; margin-top:10px");
     controls.html(`
-      <div style="display:flex;justify-content:center;gap:10px;">
-        <button onclick="setDirection('LEFT')">⬅️</button>
-        <button onclick="setDirection('UP')">⬆️</button>
-        <button onclick="setDirection('DOWN')">⬇️</button>
-        <button onclick="setDirection('RIGHT')">➡️</button>
+      <div style="display:grid;grid-template-columns:40px 40px 40px;gap:5px;justify-content:center;">
+        <div></div><button onclick="setDirection('UP')">⬆️</button><div></div>
+        <button onclick="setDirection('LEFT')">⬅️</button><div></div><button onclick="setDirection('RIGHT')">➡️</button>
+        <div></div><button onclick="setDirection('DOWN')">⬇️</button><div></div>
       </div>
     `);
   }
@@ -81,49 +58,74 @@ function resetGame() {
   nextDirection = direction.copy();
   gameOver = false;
   ghostScared = false;
-  ghostTimer = frameCount;
-  pacman = createVector(1, 1);
-  ghosts = [
-    { pos: createVector(18, 1), img: ghostImgs[0], active: true },
-    { pos: createVector(1, 18), img: ghostImgs[1], active: true },
-    { pos: createVector(10, 10), img: ghostImgs[2], active: true },
-    { pos: createVector(18, 18), img: ghostImgs[3], active: true }
-  ];
+  pacman = createVector(13, 23);
+  pacmanLives = 3;
+  initGrid();
+  initGhosts();
+  updateScoreDisplay();
+  loop();
+}
+
+function initGrid() {
   grid = [];
   for (let y = 0; y < rows; y++) {
     let row = [];
     for (let x = 0; x < cols; x++) {
-      row.push({ wall: levelMap[y][x] === 1, disco: levelMap[y][x] === 0 });
+      row.push({ wall: false, disco: false });
     }
     grid.push(row);
   }
-  document.getElementById("score").innerText = "Score: 0";
-  loop();
+  // Ex: dessine des murs (simplifié ici)
+  for (let y = 0; y < rows; y++) {
+    for (let x = 0; x < cols; x++) {
+      if (x === 0 || x === cols - 1 || y === 0 || y === rows - 1) grid[y][x].wall = true;
+      else if ((x + y) % 7 === 0) grid[y][x].wall = true;
+      else grid[y][x].disco = true;
+    }
+  }
+  // Enclos fantômes (ex : ligne horizontale)
+  for (let x = 11; x <= 16; x++) grid[14][x].wall = true;
+  for (let y = 13; y <= 15; y++) grid[y][13].wall = true;
+}
+
+function initGhosts() {
+  ghosts = [];
+  ghostSpawnTimers = [];
+  for (let i = 0; i < 4; i++) {
+    ghosts.push({ pos: createVector(13, 14), img: ghostImgs[i], active: false });
+    ghostSpawnTimers.push(frameCount + i * 30);
+  }
 }
 
 function draw() {
-  if (backgroundImg && backgroundImg.width > 0) {
-    background(backgroundImg);
-  } else {
-    background(0);
-  }
+  if (backgroundImg && backgroundImg.width > 0) background(backgroundImg);
+  else background(0);
 
-  if (frameCount - ghostTimer > 120) {
-    ghostScared = !ghostScared;
-    ghostTimer = frameCount;
-  }
+  if (frameCount - ghostScaredTimer > 120) ghostScared = false;
 
+  drawHUD();
   drawMap();
   movePacman();
   drawPacman();
+  handleGhostSpawns();
   moveGhosts();
   drawGhosts();
+  drawLives();
 
   if (grid[pacman.y][pacman.x].disco) {
     grid[pacman.y][pacman.x].disco = false;
     score++;
-    document.getElementById("score").innerText = "Score: " + score;
+    updateScoreDisplay();
   }
+}
+
+function drawHUD() {
+  fill(255);
+  textSize(12);
+  textAlign(LEFT);
+  text(`1UP  ${score}`, 10, 15);
+  textAlign(CENTER);
+  text(`HIGH SCORE  ${highScore}`, width / 2, 15);
 }
 
 function drawMap() {
@@ -131,9 +133,9 @@ function drawMap() {
     for (let x = 0; x < cols; x++) {
       if (grid[y][x].wall) {
         fill(0, 0, 255);
-        rect(x * gridSize, y * gridSize, gridSize, gridSize);
+        rect(x * gridSize, y * gridSize + 20, gridSize, gridSize);
       } else if (grid[y][x].disco) {
-        image(discoImg, x * gridSize + 6, y * gridSize + 6, gridSize - 12, gridSize - 12);
+        image(discoImg, x * gridSize + 6, y * gridSize + 26, gridSize - 12, gridSize - 12);
       }
     }
   }
@@ -149,52 +151,46 @@ function movePacman() {
   if (!grid[ny]?.[nx]?.wall) {
     pacman.x = nx;
     pacman.y = ny;
-    pacmanAngle = direction.heading();
-    pacmanMouth = (pacmanMouth + 1) % 2;
   }
 }
 
 function drawPacman() {
-  push();
-  translate(pacman.x * gridSize + gridSize / 2, pacman.y * gridSize + gridSize / 2);
-  rotate(pacmanAngle);
-  image(pacmanImg, -gridSize / 2, -gridSize / 2, gridSize, gridSize);
-  pop();
+  image(pacmanImg, pacman.x * gridSize, pacman.y * gridSize + 20, gridSize, gridSize);
+}
+
+function handleGhostSpawns() {
+  for (let i = 0; i < ghosts.length; i++) {
+    if (!ghosts[i].active && frameCount >= ghostSpawnTimers[i]) ghosts[i].active = true;
+  }
 }
 
 function moveGhosts() {
   for (let ghost of ghosts) {
     if (!ghost.active) continue;
-    if (frameCount % 5 === 0) {
-      if (ghostScared) {
-        let dirs = shuffle([createVector(1, 0), createVector(-1, 0), createVector(0, 1), createVector(0, -1)]);
-        for (let d of dirs) {
-          let nx = ghost.pos.x + d.x;
-          let ny = ghost.pos.y + d.y;
-          if (!grid[ny]?.[nx]?.wall) {
-            ghost.pos.add(d);
-            break;
-          }
-        }
-      } else {
-        let dx = pacman.x - ghost.pos.x;
-        let dy = pacman.y - ghost.pos.y;
-        if (abs(dx) > abs(dy)) {
-          ghost.pos.x += dx > 0 && !grid[ghost.pos.y][ghost.pos.x + 1].wall ? 1 : dx < 0 && !grid[ghost.pos.y][ghost.pos.x - 1].wall ? -1 : 0;
-        } else {
-          ghost.pos.y += dy > 0 && !grid[ghost.pos.y + 1][ghost.pos.x].wall ? 1 : dy < 0 && !grid[ghost.pos.y - 1][ghost.pos.x].wall ? -1 : 0;
-        }
-      }
+    let dx = pacman.x - ghost.pos.x;
+    let dy = pacman.y - ghost.pos.y;
+    if (abs(dx) > abs(dy)) {
+      ghost.pos.x += dx > 0 && !grid[ghost.pos.y][ghost.pos.x + 1].wall ? 1 : dx < 0 && !grid[ghost.pos.y][ghost.pos.x - 1].wall ? -1 : 0;
+    } else {
+      ghost.pos.y += dy > 0 && !grid[ghost.pos.y + 1][ghost.pos.x].wall ? 1 : dy < 0 && !grid[ghost.pos.y - 1][ghost.pos.x].wall ? -1 : 0;
     }
+
     if (ghost.pos.x === pacman.x && ghost.pos.y === pacman.y) {
       if (ghostScared) {
         ghost.active = false;
         score += 100;
-        document.getElementById("score").innerText = "Score: " + score;
       } else {
-        gameOver = true;
-        noLoop();
+        pacmanLives--;
+        if (pacmanLives <= 0) {
+          gameOver = true;
+          noLoop();
+        } else {
+          pacman = createVector(13, 23);
+          direction = createVector(1, 0);
+          nextDirection = direction.copy();
+        }
       }
+      updateScoreDisplay();
     }
   }
 }
@@ -203,8 +199,19 @@ function drawGhosts() {
   for (let ghost of ghosts) {
     if (!ghost.active) continue;
     let img = ghostScared ? ghostScaredImg : ghost.img;
-    image(img, ghost.pos.x * gridSize, ghost.pos.y * gridSize, gridSize, gridSize);
+    image(img, ghost.pos.x * gridSize, ghost.pos.y * gridSize + 20, gridSize, gridSize);
   }
+}
+
+function drawLives() {
+  for (let i = 0; i < pacmanLives; i++) {
+    image(pacmanImg, 10 + i * 22, height - 20, 18, 18);
+  }
+}
+
+function updateScoreDisplay() {
+  if (score > highScore) highScore = score;
+  document.getElementById("score").innerText = "Score: " + score;
 }
 
 function keyPressed() {
@@ -226,9 +233,6 @@ function touchStarted() {
 function touchEnded() {
   let dx = mouseX - touchStartX;
   let dy = mouseY - touchStartY;
-  if (abs(dx) > abs(dy)) {
-    nextDirection = createVector(dx > 0 ? 1 : -1, 0);
-  } else {
-    nextDirection = createVector(0, dy > 0 ? 1 : -1);
-  }
+  if (abs(dx) > abs(dy)) nextDirection = createVector(dx > 0 ? 1 : -1, 0);
+  else nextDirection = createVector(0, dy > 0 ? 1 : -1);
 }
